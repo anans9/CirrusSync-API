@@ -1,0 +1,223 @@
+version: '3.8'
+
+services:
+  # Main API Service
+  cirrussync-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      # Server Configuration
+      - PORT=8000
+      - HOST=0.0.0.0
+      - ENVIRONMENT=development
+      - REQUEST_TIMEOUT=30
+      - SHUTDOWN_TIMEOUT=10
+
+      # Database Configuration
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=cirrussync
+      - DB_USER=cirrussync
+      - DB_PASSWORD=cirrussync_password
+      - DB_SSL_MODE=disable
+      - DB_TIMEZONE=UTC
+      - DB_MAX_OPEN_CONNS=25
+      - DB_MAX_IDLE_CONNS=10
+      - DB_CONN_MAX_LIFETIME=300
+      - MIGRATE_ON_BOOT=true
+
+      # Redis Configuration
+      - REDIS_ADDR=redis:6379
+      - REDIS_PASSWORD=
+      - REDIS_DB=0
+      - REDIS_MAX_RETRIES=3
+      - REDIS_POOL_SIZE=10
+
+      # S3 Configuration (using MinIO)
+      - S3_REGION=us-east-1
+      - S3_BUCKET_NAME=cirrussync-dev
+      - S3_ACCESS_KEY_ID=minioadmin
+      - S3_SECRET_ACCESS_KEY=minioadmin
+      - S3_ENDPOINT=http://minio:9000
+
+      # CSRF Protection
+      - CSRF_SECRET=dev-csrf-secret-key-32-characters
+      - CSRF_SECURE=false
+
+      # Mail Configuration (Mailhog for development)
+      - MAIL_SMTP_HOST=mailhog
+      - MAIL_SMTP_PORT=1025
+      - MAIL_SMTP_USERNAME=
+      - MAIL_SMTP_PASSWORD=
+      - MAIL_FROM_ADDRESS=noreply@cirrussync.local
+      - MAIL_FROM_NAME=CirrusSync Dev
+
+      # TOTP Configuration
+      - TOTP_ISSUER=CirrusSync Dev
+      - TOTP_ACCOUNT_NAME=CirrusSync Development
+    volumes:
+      - ./keys:/app/keys:ro
+      - api_logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - cirrussync-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=cirrussync
+      - POSTGRES_USER=cirrussync
+      - POSTGRES_PASSWORD=cirrussync_password
+      - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - cirrussync-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cirrussync -d cirrussync"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - cirrussync-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+
+  # MinIO (S3-compatible storage for development)
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    volumes:
+      - minio_data:/data
+    networks:
+      - cirrussync-network
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+      start_period: 30s
+
+  # MinIO Client for bucket creation
+  minio-client:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks:
+      - cirrussync-network
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin;
+      /usr/bin/mc mb myminio/cirrussync-dev --ignore-existing;
+      /usr/bin/mc policy set public myminio/cirrussync-dev;
+      exit 0;
+      "
+
+  # Mailhog for email testing
+  mailhog:
+    image: mailhog/mailhog:latest
+    ports:
+      - "1025:1025"  # SMTP port
+      - "8025:8025"  # Web UI port
+    networks:
+      - cirrussync-network
+    restart: unless-stopped
+
+  # pgAdmin for database management (optional)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@cirrussync.local
+      - PGADMIN_DEFAULT_PASSWORD=admin
+      - PGADMIN_CONFIG_SERVER_MODE=False
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+    networks:
+      - cirrussync-network
+    restart: unless-stopped
+    profiles:
+      - tools
+
+  # Redis Commander for Redis management (optional)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    networks:
+      - cirrussync-network
+    restart: unless-stopped
+    profiles:
+      - tools
+
+# Named volumes for persistent data
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  minio_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+  api_logs:
+    driver: local
+
+# Custom network
+networks:
+  cirrussync-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

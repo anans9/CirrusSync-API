@@ -1,0 +1,76 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+cirrussync-api
+main
+
+# Go workspace file
+go.work
+
+# Build artifacts
+build/
+bin/
+
+# Air (hot reload) temporary files
+tmp/
+.air/
+
+# Environment files
+.env
+.env.local
+.env.development
+.env.development.local
+.env.test
+.env.test.local
+.env.production
+.env.production.local
+
+# Configuration files with sensitive data
+config.json
+config.yaml
+config.yml
+secrets.json
+
+# Private keys and certificates
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+keys/
+certs/
+ssl/
+
+# Database files
+*.db
+
+# Log files
+*.log
+logs/
+log/
+
+# OS generated files
+.DS_Store
+
+# Kubernetes
+*.kubeconfig
+
+# Backup files
+*.backup
+
+# Temporary files
+*.tmp
+.tmp/
+
+# Migration files (if auto-generated)
+migrations/*.sql
+
+# Local development certificates
+localhost.pem
+localhost-key.pem
+
+# Go module cache (when working with local modules)
+go.sum.bak
+
+# Air configuration backup
+air.toml.bak
