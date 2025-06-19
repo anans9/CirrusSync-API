@@ -72,7 +72,7 @@ A secure, end-to-end encrypted cloud storage API built with Go, featuring advanc
 ### Clone Repository
 
 ```bash
-git clone https://github.com/yourusername/cirrussync-api.git
+git clone https://github.com/anans9/cirrussync-api.git
 cd cirrussync-api
 ```
 
