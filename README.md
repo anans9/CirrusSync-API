@@ -410,12 +410,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Ensure all tests pass before submitting PR
 - Use conventional commit messages
 
-## 📞 Support
-
-- **Documentation**: [Wiki](https://github.com/yourusername/cirrussync-api/wiki)
-- **Issues**: [GitHub Issues](https://github.com/yourusername/cirrussync-api/issues)
-- **Security**: security@cirrussync.com
-
 ## 🎯 Roadmap
 
 - [ ] Billing support
